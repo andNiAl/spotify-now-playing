@@ -4,7 +4,9 @@ const refresh_token = process.env.SPOTIFY_REFRESH_TOKEN;
 
 const basic = Buffer.from(`${client_id}:${client_secret}`).toString("base64");
 
-const NOW_PLAYING_ENDPOINT = "https://api.spotify.com/v1/me/player/currently-playing";
+const RECENTLY_PLAYED_ENDPOINT =
+  "https://api.spotify.com/v1/me/player/recently-played?limit=1";
+
 const TOKEN_ENDPOINT = "https://accounts.spotify.com/api/token";
 
 async function getAccessToken() {
@@ -22,21 +24,27 @@ async function getAccessToken() {
 }
 
 export default async function handler(req, res) {
-  const { access_token } = await getAccessToken().then(res => res.json());
+  const { access_token } = await getAccessToken().then((res) => res.json());
 
-  const response = await fetch(NOW_PLAYING_ENDPOINT, {
+  const response = await fetch(RECENTLY_PLAYED_ENDPOINT, {
     headers: { Authorization: `Bearer ${access_token}` },
   });
 
-  if (response.status === 204 || response.status > 400) {
-    return res.status(200).send("Not playing anything right now");
+  if (response.status > 400) {
+    return res.status(200).send("Error fetching song");
   }
 
-  const song = await response.json();
+  const data = await response.json();
 
-  const title = song.item.name;
-  const artist = song.item.artists.map(a => a.name).join(", ");
-  const cover = song.item.album.images[0].url;
+  if (!data.items || data.items.length === 0) {
+    return res.status(200).send("No songs found");
+  }
+
+  const song = data.items[0].track;
+
+  const title = song.name;
+  const artist = song.artists.map((a) => a.name).join(", ");
+  const cover = song.album.images[0].url;
 
   const svg = `
   <svg width="600" height="180" xmlns="http://www.w3.org/2000/svg">
@@ -47,9 +55,9 @@ export default async function handler(req, res) {
       </linearGradient>
     </defs>
 
-    <rect width="600" height="180" rx="20" fill="url(#bg)" />
+    <rect width="600" height="180" rx="25" fill="url(#bg)" />
 
-    <image href="${cover}" x="20" y="20" width="140" height="140" rx="15"/>
+    <image href="${cover}" x="20" y="20" width="140" height="140" style="border-radius:20px;" />
 
     <text x="190" y="80" font-size="28" font-family="Verdana" fill="#6a1b4d" font-weight="bold">
       ${title}
@@ -60,7 +68,7 @@ export default async function handler(req, res) {
     </text>
 
     <text x="190" y="150" font-size="16" font-family="Verdana" fill="#b76e91">
-      🎧 Now Playing
+      🎀 Recently Played
     </text>
   </svg>
   `;
